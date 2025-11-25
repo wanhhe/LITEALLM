@@ -57,7 +57,7 @@ python finetune_codes/demo_data/audio_understanding/prepare_librispeech_asrtask.
 ```
 
 ### Step4: Compress and Eval
-You can specify the task and data_path to change the evaluation task.
+You can specify the task and data_path in `compress_kima.sh` to change the evaluation task.
 
 for sec task, you can specify the task and data_path to change the evaluation task.
 ```bash
