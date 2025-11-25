@@ -493,9 +493,15 @@ def make_supervised_data_module(
 
     rank0_print(f"Loading ASR data from {path} ...")
 
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-        all_data = [json.loads(line) for line in lines]
+    if os.path.isdir(path):
+        for item in os.listdir(path):
+            with open(os.path.join(path, item), "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                all_data = [json.loads(line) for line in lines]
+    else:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            all_data = [json.loads(line) for line in lines]
 
     if data_args.eval_ratio > 0:
         split_idx = int(len(all_data) * data_args.eval_ratio)
@@ -1467,7 +1473,15 @@ def run():
         bench_dataset = bench_dm["train_dataset"]
         print(f"Loaded {len(bench_dataset)} ASR benchmark samples from {data_args.data_path}")
     else:
-        bench_dataset = pd.read_parquet(data_args.data_path)
+        import glob
+        if os.path.isdir(data_args.data_path):
+            files = glob.glob(os.path.join(data_args.data_path, "*.parquet"))
+            if not files:
+                raise FileNotFoundError(f"No parquet files found in folder: {data_args.data_path}")
+            dfs = [pd.read_parquet(f) for f in files]
+            bench_dataset = pd.concat(dfs, ignore_index=True)
+        else:
+            bench_dataset = pd.read_parquet(data_args.data_path)
         print(f"Loaded {len(bench_dataset)} '{data_args.task}' benchmark samples from {data_args.data_path}")
 
     # ====== 压缩前 benchmark ======

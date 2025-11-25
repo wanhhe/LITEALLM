@@ -23,36 +23,10 @@ MASTER_ADDR=${MASTER_ADDR:-localhost}
 # The port for communication
 MASTER_PORT=${MASTER_PORT:-6001}
 
-# python compress_kima.py \
-#   --model_path pretrains/Kimi-Audio-7B-Instruct \
-#   --task aqa \
-#   --data_path clothoaqa/test-00000-of-00035.parquet \
-#   --output_dir output/compress \
-#   --model_max_length 1024 \
-#   --rank_threshold "0.99:0.99" \
-#   --num_test_samples 200 \
-#   --low_rank True \
-#   --calib_task asr \
-#   --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
-#   --num_calib_samples 100
-
-# python compress_kima.py \
-#   --model_path pretrains/Kimi-Audio-7B-Instruct \
-#   --task ar \
-#   --data_path mmau/test_mini-00000-of-00008.parquet \
-#   --output_dir output/compress \
-#   --model_max_length 1024 \
-#   --rank_threshold "0.99:0.99" \
-#   --num_test_samples 100 \
-#   --low_rank True \
-#   --calib_task asr \
-#   --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
-#   --num_calib_samples 100
-
 python compress_kima.py \
   --model_path pretrains/Kimi-Audio-7B-Instruct \
   --task sec \
-  --data_path nonspeech7k/test.parquet \
+  --data_path nonspeech7k \
   --output_dir output/compress \
   --model_max_length 1024 \
   --rank_threshold "0.98:0.98" \
@@ -65,7 +39,7 @@ python compress_kima.py \
 # python compress_kima.py \
 #   --model_path pretrains/Kimi-Audio-7B-Instruct \
 #   --task emotion \
-#   --data_path SAVEE/data/train-00000-of-00001.parquet \
+#   --data_path SAVEE \
 #   --output_dir output/compress \
 #   --model_max_length 1024 \
 #   --rank_threshold "0.99:0.99" \
@@ -78,7 +52,7 @@ python compress_kima.py \
 # python compress_kima.py \
 #   --model_path pretrains/Kimi-Audio-7B-Instruct \
 #   --task ar \
-#   --data_path mmau/test_mini-00000-of-00008.parquet \
+#   --data_path mmau \
 #   --output_dir output/compress \
 #   --model_max_length 1024 \
 #   --rank_threshold "0.99:0.99" \
@@ -91,7 +65,7 @@ python compress_kima.py \
 # python compress_kima.py \
 #   --model_path pretrains/Kimi-Audio-7B-Instruct \
 #   --task aqa \
-#   --data_path clothoaqa/test-00000-of-00035.parquet \
+#   --data_path clothoaqa \
 #   --output_dir output/compress \
 #   --model_max_length 1024 \
 #   --rank_threshold "0.99:0.99" \
