@@ -52,6 +52,7 @@ You can download the parquet files from Hugging Face and place them in the corre
 For example, AbstractTTS/SAVEE, lmms-lab/mmau, CLAPv2/Nonspeech7k, gijs/clothoaqa
 
 #### prepare datasets for asr
+This section is derived from data processing by [Kimi Audio Finetune](https://github.com/MoonshotAI/Kimi-Audio/blob/master/finetune_codes/README.md).
 ```bash
 python finetune_codes/demo_data/audio_understanding/prepare_librispeech_asrtask.py --output_dir "output/data/librispeech"
 ```
@@ -71,7 +72,7 @@ python compress_kima.py \
   --num_test_samples 100 \
   --low_rank True \
   --calib_task asr \
-  --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
+  --calib_data_path output/data/librispeech/librispeech.jsonl \
   --num_calib_samples 100
 ```
 
