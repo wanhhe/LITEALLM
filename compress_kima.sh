@@ -33,7 +33,7 @@ python compress_kima.py \
   --num_test_samples 100 \
   --low_rank True \
   --calib_task asr \
-  --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
+  --calib_data_path output/data/librispeech/librispeech.jsonl \
   --num_calib_samples 100
 
 # python compress_kima.py \
@@ -46,7 +46,7 @@ python compress_kima.py \
 #   --num_test_samples 100 \
 #   --low_rank True \
 #   --calib_task asr \
-#   --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
+#   --calib_data_path output/data/librispeech/librispeech.jsonl \
 #   --num_calib_samples 100
 
 # python compress_kima.py \
@@ -59,7 +59,7 @@ python compress_kima.py \
 #   --num_test_samples 100 \
 #   --low_rank True \
 #   --calib_task asr \
-#   --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
+#   --calib_data_path output/data/librispeech/librispeech.jsonl \
 #   --num_calib_samples 100
 
 # python compress_kima.py \
@@ -72,5 +72,5 @@ python compress_kima.py \
 #   --num_test_samples 100 \
 #   --low_rank True \
 #   --calib_task asr \
-#   --calib_data_path output/data/librispeech/librispeech_with_semantic_codes.jsonl \
+#   --calib_data_path output/data/librispeech/librispeech.jsonl \
 #   --num_calib_samples 100

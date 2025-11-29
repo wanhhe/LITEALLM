@@ -9,7 +9,7 @@ import librosa
 class LazySupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
 
-    def __init__(self, raw_data_list, whisper_model, text_tokenizer, max_len: int, kimia_token_offset: int):
+    def __init__(self, raw_data_list, whisper_model, text_tokenizer, max_len: int, kimia_token_offset: int, need_speech_token: bool):
         super(LazySupervisedDataset, self).__init__()
         self.whisper_model = whisper_model
         self.max_len = max_len
@@ -27,6 +27,8 @@ class LazySupervisedDataset(Dataset):
         self.raw_data = raw_data_list
 
         self.cached_data_dict = {}
+
+        self.need_speech_token = need_speech_token
 
     def __len__(self):
         return len(self.raw_data)
@@ -98,23 +100,24 @@ class LazySupervisedDataset(Dataset):
                 kimia_content_msg.audio_append(self.extra_tokens.kimia_text_blank, audio_token_loss_mask=False)
 
         elif message["message_type"] == "audio":
-            speech_tokens = message["audio_tokens"]
+            if self.need_speech_token:
+                speech_tokens = message["audio_tokens"]
 
-            kimia_content_msg.audio_append(self.extra_tokens.media_begin)
-            kimia_content_msg.audio_extend(speech_tokens, is_continuous=True, audio_token_loss_mask=has_loss)
-            kimia_content_msg.audio_append(self.extra_tokens.media_end, audio_token_loss_mask=has_loss) # EOS for audio stream
-            kimia_content_msg.text_extend(
-                [self.extra_tokens.kimia_text_blank] * (len(speech_tokens) + 2)
-            )
+                kimia_content_msg.audio_append(self.extra_tokens.media_begin)
+                kimia_content_msg.audio_extend(speech_tokens, is_continuous=True, audio_token_loss_mask=has_loss)
+                kimia_content_msg.audio_append(self.extra_tokens.media_end, audio_token_loss_mask=has_loss) # EOS for audio stream
+                kimia_content_msg.text_extend(
+                    [self.extra_tokens.kimia_text_blank] * (len(speech_tokens) + 2)
+                )
 
-            if has_ct_token:
-                if output_type == "text":
-                    kimia_content_msg.audio_append(self.extra_tokens.kimia_speech_ct_id)
-                else:
-                    kimia_content_msg.audio_append(
-                        self.extra_tokens.kimia_speech_ctd_id
-                    )
-                kimia_content_msg.text_append(self.extra_tokens.kimia_text_blank)
+                if has_ct_token:
+                    if output_type == "text":
+                        kimia_content_msg.audio_append(self.extra_tokens.kimia_speech_ct_id)
+                    else:
+                        kimia_content_msg.audio_append(
+                            self.extra_tokens.kimia_speech_ctd_id
+                        )
+                    kimia_content_msg.text_append(self.extra_tokens.kimia_text_blank)
 
             if extract_whisper_feature:
                 whisper_feature = self.extract_whisper_feat(message["content"])

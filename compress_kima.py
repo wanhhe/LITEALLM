@@ -519,6 +519,7 @@ def make_supervised_data_module(
         text_tokenizer=text_tokenizer,
         max_len=max_len,
         kimia_token_offset=kimia_token_offset,
+        need_speech_token=False,
     )
 
     if eval_data:
@@ -528,6 +529,7 @@ def make_supervised_data_module(
             text_tokenizer=text_tokenizer,
             max_len=max_len,
             kimia_token_offset=kimia_token_offset,
+            need_speech_token=False,
         )
     else:
         eval_dataset = None
