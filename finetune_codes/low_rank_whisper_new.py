@@ -73,22 +73,8 @@ import torch
 import torch.nn as nn
 import tqdm
 
-# 保留你原来的 LinearLowRank / build_layerwise_theta_fn 不变
-# 这里只改 hook + apply_low_rank
-
 def attach_calibration_hooks_to_whisper_encoder(encoder):
-    """
-    encoder: whisper.speech_encoder (WhisperEncoder)
-
-    这里不再把所有 token 激活攒在 calibration_outputs 里，
-    而是对每个 module 累积：
-      - calib_count      : 总 token 数
-      - calib_sum_y      : 所有 y 的和       [D]
-      - calib_sum_yyT    : 所有 y^T y 的和   [D, D]
-
-    这样样本数可以很大，内存只和 D 有关，不和 token 总数有关。
-    """
-    encoder.is_calibrating = False  # 标志位
+    encoder.is_calibrating = False
 
     def make_hook(module_name):
         def hook(module, inputs, output):
@@ -98,33 +84,34 @@ def attach_calibration_hooks_to_whisper_encoder(encoder):
             out = output
             if isinstance(out, tuple):
                 out = out[0]
-            # out: [B, T, D]
             out = out.detach()
             B, T, D = out.shape
-            y = out.reshape(-1, D).float().cpu()   # [N_tokens, D]
 
-            # 初始化统计量
+            # 1. 移到 if 之外，并确保 y 总是 float64
+            y = out.reshape(-1, D).double().cpu() # double is float64
+
+            # 2. 初始化统计量（只在第一次）
             if not hasattr(module, "calib_count"):
                 module.calib_count = 0
-                module.calib_sum_y = torch.zeros(D, dtype=torch.float32)
-                module.calib_sum_yyT = torch.zeros(D, D, dtype=torch.float32)
+                # 初始化为 float64
+                module.calib_sum_y = torch.zeros(D, dtype=torch.float64)
+                module.calib_sum_yyT = torch.zeros(D, D, dtype=torch.float64)
 
-            # 累积
+            # 3. 累积 (现在 y 保证是 float64)
             module.calib_count += y.shape[0]
-            module.calib_sum_y += y.sum(dim=0)              # [D]
-            # y.T @ y: [D, D]
+            module.calib_sum_y += y.sum(dim=0)
+            # 这里的 y.T @ y 将在双精度下计算
             module.calib_sum_yyT += y.T @ y
 
         return hook
 
     for layer in encoder.layers:
-        # self-attn 的四个 Linear
+        # ... (和原来一样)
         attn = layer.self_attn
         for proj_name in ["q_proj", "k_proj", "v_proj", "out_proj"]:
             mod = getattr(attn, proj_name)
             mod.register_forward_hook(make_hook(f"self_attn.{proj_name}"))
 
-        # MLP 两层
         for mlp_name in ["fc1", "fc2"]:
             mod = getattr(layer, mlp_name)
             mod.register_forward_hook(make_hook(mlp_name))
@@ -159,118 +146,86 @@ def apply_low_rank_to_whisper_encoder(
         ]
 
         for name, layer, is_attn in components:
-            # 1) 没有校准统计，直接跳过（这里才是你原来想要的 continue）
             if not hasattr(layer, "calib_count") or layer.calib_count == 0:
-                # 你想看的话可以加一行：
-                # print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | no calib stats, skip")
                 continue
 
             count = layer.calib_count
-            sum_y = layer.calib_sum_y      # [D]
-            sum_yyT = layer.calib_sum_yyT  # [D, D]
+            sum_y = layer.calib_sum_y
+            sum_yyT = layer.calib_sum_yyT
 
-            # 2) 计算均值和 E[yy^T]
-            mean = (sum_y / count).to(torch.float32)          # [D]
-            E_yyT = (sum_yyT / count).to(torch.float32)       # [D, D]
-
-            # 协方差 Cov = E[yy^T] - μ μ^T，顺便对称化一下防止数值问题
+            # 1. 在 float64 下计算协方差以保证数值稳定性
+            mean = (sum_y / count).to(torch.float64)
+            E_yyT = (sum_yyT / count).to(torch.float64)
             cov = E_yyT - torch.outer(mean, mean)
             cov = (cov + cov.T) * 0.5
 
-            # 简单检查一下是否有 NaN / Inf
             if not torch.isfinite(cov).all():
                 print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | non-finite cov, skip")
                 continue
 
-            # 3) 特征分解
+            # 2. 在 float64 下进行特征分解
             try:
-                evals, evecs = torch.linalg.eigh(cov)   # evals: [D], evecs: [D,D]
+                evals, evecs = torch.linalg.eigh(cov)
             except RuntimeError as e:
                 print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | eigh failed: {e}, skip")
                 continue
 
-            # 从小到大排序，取后面大的（方差大的主方向）
             evals = evals.clamp_min(0)
             total_energy = evals.sum()
             if total_energy <= 0:
                 print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | zero energy, skip")
                 continue
 
-            # theta = theta_fn(i_layer, is_attn)
-
-            # # 按能量从大到小累积
-            # evals_sorted, indices = torch.sort(evals, descending=True)
-            # cumsum = torch.cumsum(evals_sorted, dim=0)
-
-            # # k = -1
-            # # for j in range(16, len(evals_sorted) + 1, 16):
-            # #     if (cumsum[:j].sum() / total_energy) > theta:
-            # #         k = j
-            # #         break
-            # k = -1
-            # for j in range(16, len(evals_sorted) + 1):
-            #     if (cumsum[:j].sum() / total_energy) > theta:
-            #         k = j
-            #         break
-
             evals_sorted, indices = torch.sort(evals, descending=True)
             cumsum = torch.cumsum(evals_sorted, dim=0)
-
             theta = theta_fn(i_layer, is_attn)
 
-            # --- 1) 先按能量阈值找最小的 k ---
-            k = int((cumsum / total_energy >= theta).nonzero(as_tuple=True)[0][0].item()) + 1
-            # k 现在是满足阈值的最小 index + 1
+            # 查找k值
+            found_k = (cumsum / total_energy >= theta).nonzero(as_tuple=True)[0]
+            if len(found_k) == 0:
+                print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | theta={theta:.6f} too high, failed to find k, skip")
+                continue
+            k = int(found_k[0].item()) + 1
 
-            # --- 2) 再加效率约束 ---
-            D_in  = layer.in_features
-            D_out = layer.out_features
-            k_eff_max = int(D_in * D_out / (D_in + D_out))
-            k = min(k, k_eff_max)
+            # 移除效率约束
+            # D_in  = layer.in_features
+            # D_out = layer.out_features
+            # k_eff_max = int(D_in * D_out / (D_in + D_out))
+            # k = min(k, k_eff_max)
 
-            # --- 3) 对齐到 16 的倍数（四舍五入/向上取都可以）---
-            k = ( (k + 15) // 16 ) * 16    # 向上取整到 16 的倍数
+            k = ( (k + 15) // 16 ) * 16
 
-            # --- 4) 一些 sanity check ---
             if k <= 0 or k > len(evals_sorted):
-                print("skip: invalid k", k)
+                print(f"skip: invalid k {k}")
                 continue
 
-
             print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | theta={theta:.6f} | k={k}/{len(evals_sorted)}")
-
-            # 4) k 不合理就跳过（不会 append stats）
-            if is_attn:
-                if k < 0 or k > 0.5 * d_model:
-                    continue
-            else:
-                if k < 0 or k > 0.8 * d_model:
-                    continue
-
-            # 5) 取前 k 个特征向量组成投影矩阵 V_k
-            proj_indices = indices[-k:]  # 注意 indices 是升序 or 降序，按上面逻辑调整
-            # 上面 sort(descending=True)，所以大的在前面，这里用前 k 个：
+            
             proj_indices = indices[:k]
-            V_k = evecs[:, proj_indices]      # [D, k]
+            V_k = evecs[:, proj_indices] # V_k 依然是 float64
 
             # ====== 构造低秩分解 ======
             device = layer.weight.device
             dtype  = layer.weight.dtype
 
-            # HF Linear: weight shape = (out_features, in_features)
-            W = layer.weight.T.detach().to(dtype=torch.float32, device="cpu")  # [D_in, D_out], D_out == D
+            # 3. ★★★★★ 新增的修复步骤 ★★★★★
+            # 将用于构造的张量统一转换到 float32
+            mean_32 = mean.to(torch.float32)
+            V_k_cpu = V_k.to(dtype=torch.float32, device="cpu")
+            # ★★★★★ 修复结束 ★★★★★
 
-            V_k_cpu = V_k.to(dtype=torch.float32, device="cpu")   # [D_out, k]
-            w1 = W @ V_k_cpu           # [D_in, k]
-            w2 = V_k_cpu.T             # [k, D_out]
+            W = layer.weight.T.detach().to(dtype=torch.float32, device="cpu")
+            w1 = W @ V_k_cpu
+            w2 = V_k_cpu.T
 
             if layer.bias is None:
-                bias = mean - mean @ V_k_cpu @ V_k_cpu.T
+                # 现在所有张量都是 float32
+                bias = mean_32 - mean_32 @ V_k_cpu @ V_k_cpu.T
             else:
                 bias0 = layer.bias.detach().to(dtype=torch.float32, device="cpu")
-                bias = mean + (bias0 - mean) @ V_k_cpu @ V_k_cpu.T
+                # 现在所有张量都是 float32
+                bias = mean_32 + (bias0 - mean_32) @ V_k_cpu @ V_k_cpu.T
 
-            # cast 回原 dtype + device
             w1   = w1.to(device=device, dtype=dtype)
             w2   = w2.to(device=device, dtype=dtype)
             bias = bias.to(device=device, dtype=dtype)

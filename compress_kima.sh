@@ -29,12 +29,12 @@ python compress_kima.py \
   --data_path nonspeech7k \
   --output_dir output/compress \
   --model_max_length 1024 \
-  --rank_threshold "0.98:0.98" \
+  --rank_threshold "0.99:0.99" \
   --num_test_samples 100 \
   --low_rank True \
-  --calib_task asr \
-  --calib_data_path output/data/librispeech/librispeech.jsonl \
-  --num_calib_samples 100
+  --calib_task sec \
+  --calib_data_path nonspeech7k \
+  --num_calib_samples 200
 
 # python compress_kima.py \
 #   --model_path pretrains/Kimi-Audio-7B-Instruct \
@@ -42,7 +42,7 @@ python compress_kima.py \
 #   --data_path SAVEE \
 #   --output_dir output/compress \
 #   --model_max_length 1024 \
-#   --rank_threshold "0.99:0.99" \
+#   --rank_threshold "0.985:0.985" \
 #   --num_test_samples 100 \
 #   --low_rank True \
 #   --calib_task asr \
@@ -55,7 +55,7 @@ python compress_kima.py \
 #   --data_path mmau \
 #   --output_dir output/compress \
 #   --model_max_length 1024 \
-#   --rank_threshold "0.99:0.99" \
+#   --rank_threshold "0.985:0.985" \
 #   --num_test_samples 100 \
 #   --low_rank True \
 #   --calib_task asr \

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+import random
 from typing import Dict, Optional, List
 
 import librosa
@@ -493,15 +494,12 @@ def make_supervised_data_module(
 
     rank0_print(f"Loading ASR data from {path} ...")
 
-    if os.path.isdir(path):
-        for item in os.listdir(path):
-            with open(os.path.join(path, item), "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                all_data = [json.loads(line) for line in lines]
-    else:
-        with open(path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            all_data = [json.loads(line) for line in lines]
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        all_data = [json.loads(line) for line in lines]
+
+    random.seed(42)
+    random.shuffle(all_data)
 
     if data_args.eval_ratio > 0:
         split_idx = int(len(all_data) * data_args.eval_ratio)
@@ -1484,6 +1482,7 @@ def run():
             bench_dataset = pd.concat(dfs, ignore_index=True)
         else:
             bench_dataset = pd.read_parquet(data_args.data_path)
+        bench_dataset = bench_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
         print(f"Loaded {len(bench_dataset)} '{data_args.task}' benchmark samples from {data_args.data_path}")
 
     # ====== 压缩前 benchmark ======
@@ -1508,8 +1507,8 @@ def run():
         device = next(whisper_model.parameters()).device
 
         # 选出“标定用”的 task 和 data_path（可与 benchmark 不同）
-        calib_task = data_args.calib_task or data_args.task
-        calib_data_path = data_args.calib_data_path or data_args.data_path
+        calib_task = data_args.calib_task
+        calib_data_path = data_args.calib_data_path
 
         print(f"[Calib] Using task = {calib_task}, data_path = {calib_data_path}")
 
@@ -1525,7 +1524,8 @@ def run():
             calib_dataset = calib_dm["train_dataset"]
 
             num_calib = min(data_args.num_calib_samples, len(calib_dataset))
-            for i in tqdm(range(num_calib), desc="Collecting calibration data (ASR)"):
+            indices = np.random.permutation(len(calib_dataset))[:num_calib]
+            for i in tqdm(indices, desc="Collecting calibration data (ASR)"):
                 sample = calib_dataset[i]
                 wav_np = sample["whisper_input_feature"][0]
                 wav_tensor = torch.tensor(
@@ -1534,25 +1534,98 @@ def run():
                 with torch.no_grad():
                     _ = whisper_model(wav_tensor)
 
+        # else:
+        #     # parquet 类任务：只需要音频
+        #     import glob
+        #     if os.path.isdir(calib_data_path):
+        #         files = glob.glob(os.path.join(calib_data_path, "*.parquet"))
+        #         if not files:
+        #             raise FileNotFoundError(f"No parquet files found in folder: {calib_data_path}")
+        #         dfs = [pd.read_parquet(f) for f in files]
+        #         calib_df = pd.concat(dfs, ignore_index=True)
+            # else:
+            #     calib_df = pd.read_parquet(calib_data_path)
+
+            # calib_df = calib_df.sample(frac=1, random_state=42).reset_index(drop=True)
+            # audio_col = data_args.calib_audio_column or get_default_audio_column_for_task(
+            #     calib_task, data_args
+            # )
+            # tmp_dir = data_args.calib_tmp_audio_dir or get_default_tmp_dir_for_task(
+            #     calib_task, data_args
+            # )
+
+            # num_calib = min(data_args.num_calib_samples, len(calib_df))
+            # for i in tqdm(range(num_calib), desc=f"Collecting calibration data ({calib_task})"):
+            #     audio_cell = calib_df.iloc[i][audio_col]
+            #     wav_np = ensure_waveform_from_cell(audio_cell, i, tmp_dir, target_sr=16000)
+            #     wav_tensor = torch.tensor(
+            #         wav_np, dtype=torch.float32, device=device
+            #     ).unsqueeze(0)
+            #     with torch.no_grad():
+            #         _ = whisper_model(wav_tensor)
         else:
             # parquet 类任务：只需要音频
-            calib_df = pd.read_parquet(calib_data_path)
+            import glob
+        
+            # 判断是否与 benchmark 使用同一数据集 & 同一任务
+            same_as_bench = (
+                calib_data_path == data_args.data_path
+                and calib_task == data_args.task
+            )
+        
+            if same_as_bench:
+                # 直接复用上面已经加载好的 bench_dataset（已被 shuffle 过）
+                calib_df = bench_dataset
+            else:
+                if os.path.isdir(calib_data_path):
+                    files = glob.glob(os.path.join(calib_data_path, "*.parquet"))
+                    if not files:
+                        raise FileNotFoundError(f"No parquet files found in folder: {calib_data_path}")
+                    dfs = [pd.read_parquet(f) for f in files]
+                    calib_df = pd.concat(dfs, ignore_index=True)
+                else:
+                    calib_df = pd.read_parquet(calib_data_path)
+                # 标定用的独立数据集，再单独 shuffle
+                calib_df = calib_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        
             audio_col = data_args.calib_audio_column or get_default_audio_column_for_task(
                 calib_task, data_args
             )
             tmp_dir = data_args.calib_tmp_audio_dir or get_default_tmp_dir_for_task(
                 calib_task, data_args
             )
-
-            num_calib = min(data_args.num_calib_samples, len(calib_df))
-            for i in tqdm(range(num_calib), desc=f"Collecting calibration data ({calib_task})"):
-                audio_cell = calib_df.iloc[i][audio_col]
-                wav_np = ensure_waveform_from_cell(audio_cell, i, tmp_dir, target_sr=16000)
+        
+            total = len(calib_df)
+            num_calib = min(data_args.num_calib_samples, total)
+        
+            if same_as_bench:
+                # 避开 benchmark 使用过的前 num_test_samples 行
+                n_bench = min(data_args.num_test_samples, total)
+                start = n_bench
+                end = min(n_bench + num_calib, total)
+                # 先用 [n_bench, end) 这部分
+                base_indices = list(range(start, end))
+        
+                if len(base_indices) < num_calib:
+                    # 不够的话，再从 [0, n_bench) 里随机补
+                    rest_needed = num_calib - len(base_indices)
+                    head = np.random.choice(np.arange(0, n_bench), size=rest_needed, replace=False)
+                    indices = base_indices + head.tolist()
+                else:
+                    indices = base_indices
+            else:
+                # 不同数据集就直接用前 num_calib 个（calib_df 自己已经 shuffle 过一遍）
+                indices = list(range(num_calib))
+        
+            for i in tqdm(indices, desc=f"Collecting calibration data ({calib_task})"):
+                audio_cell = calib_df.iloc[int(i)][audio_col]
+                wav_np = ensure_waveform_from_cell(audio_cell, int(i), tmp_dir, target_sr=16000)
                 wav_tensor = torch.tensor(
                     wav_np, dtype=torch.float32, device=device
                 ).unsqueeze(0)
                 with torch.no_grad():
                     _ = whisper_model(wav_tensor)
+
 
         whisper_encoder.is_calibrating = False
 

@@ -181,6 +181,7 @@ output
 tmp_kimia_aqa_bench
 tmp_kimia_ar_bench
 tmp_kimia_sec_bench
+tmp_kimia_emotion_bench
 SAVEE
 nonspeech7k
 clothoaqa
