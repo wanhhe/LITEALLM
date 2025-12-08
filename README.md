@@ -6,7 +6,6 @@ We propose LITEALLM, a method that compresses the encoder in large audio languag
 
 - [Introduction](#introduction)
 - [Getting Started](#getting-started)
-- [Acknowledgements](#acknowledgements)
 
 ## Introduction
 
@@ -81,15 +80,3 @@ bash compress_kima.sh
 ```
 
 We use the ASR task to Calibrate data. If needed, you can also change the `calib_task` and `calib_data_path` parameters to use other tasks.
-
-
-## Acknowledgements
-
-We would like to thank the following projects and individuals for their contributions to the development of LITEALLM:
-
-* [Whisper](https://github.com/openai/whisper)
-* [Transformers](https://github.com/huggingface/transformers)
-* [Kimi-Audio](https://github.com/MoonshotAI/Kimi-Audio)
-* [GLM-4-Voice](https://github.com/THUDM/GLM-4-Voice)
-
-Thank you to all the open-source projects for their contributions to this project!
