@@ -23,18 +23,18 @@ MASTER_ADDR=${MASTER_ADDR:-localhost}
 # The port for communication
 MASTER_PORT=${MASTER_PORT:-6001}
 
-python compress_kima.py \
-  --model_path pretrains/Kimi-Audio-7B-Instruct \
-  --task sec \
-  --data_path nonspeech7k \
-  --output_dir output/compress \
-  --model_max_length 1024 \
-  --rank_threshold "0.99:0.99" \
-  --num_test_samples 100 \
-  --low_rank True \
-  --calib_task sec \
-  --calib_data_path nonspeech7k \
-  --num_calib_samples 200
+# python compress_kima.py \
+#   --model_path pretrains/Kimi-Audio-7B-Instruct \
+#   --task sec \
+#   --data_path nonspeech7k \
+#   --output_dir output/compress \
+#   --model_max_length 1024 \
+#   --rank_threshold "0.99:0.99" \
+#   --num_test_samples 100 \
+#   --low_rank True \
+#   --calib_task sec \
+#   --calib_data_path nonspeech7k \
+#   --num_calib_samples 200
 
 # python compress_kima.py \
 #   --model_path pretrains/Kimi-Audio-7B-Instruct \
@@ -42,12 +42,12 @@ python compress_kima.py \
 #   --data_path SAVEE \
 #   --output_dir output/compress \
 #   --model_max_length 1024 \
-#   --rank_threshold "0.985:0.985" \
+#   --rank_threshold "0.99:0.99" \
 #   --num_test_samples 100 \
 #   --low_rank True \
 #   --calib_task asr \
 #   --calib_data_path output/data/librispeech/librispeech.jsonl \
-#   --num_calib_samples 100
+#   --num_calib_samples 200
 
 # python compress_kima.py \
 #   --model_path pretrains/Kimi-Audio-7B-Instruct \
@@ -62,15 +62,15 @@ python compress_kima.py \
 #   --calib_data_path output/data/librispeech/librispeech.jsonl \
 #   --num_calib_samples 100
 
-# python compress_kima.py \
-#   --model_path pretrains/Kimi-Audio-7B-Instruct \
-#   --task aqa \
-#   --data_path clothoaqa \
-#   --output_dir output/compress \
-#   --model_max_length 1024 \
-#   --rank_threshold "0.99:0.99" \
-#   --num_test_samples 100 \
-#   --low_rank True \
-#   --calib_task asr \
-#   --calib_data_path output/data/librispeech/librispeech.jsonl \
-#   --num_calib_samples 100
+python compress_kima.py \
+  --model_path pretrains/Kimi-Audio-7B-Instruct \
+  --task aqa \
+  --data_path clothoaqa \
+  --output_dir output/compress \
+  --model_max_length 1024 \
+  --rank_threshold "0.99:0.99" \
+  --num_test_samples 100 \
+  --low_rank True \
+  --calib_task asr \
+  --calib_data_path output/data/librispeech/librispeech.jsonl \
+  --num_calib_samples 100

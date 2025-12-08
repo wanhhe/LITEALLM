@@ -1,5 +1,4 @@
 # LITEALLM
-[![arXiv](https://img.shields.io/badge/arXiv-gugugaga.svg)](https://arxiv.org/abs/gugugaga)
 
 We propose LITEALLM, a method that compresses the encoder in large audio language models by using activation values, thereby improving encoding and inference speed.
 
@@ -12,19 +11,19 @@ We propose LITEALLM, a method that compresses the encoder in large audio languag
 ## Introduction
 
 <p align="center">
-    <img src="assets/gugugaga.png" width="70%"/>
+    <img src="assets/fig.png" width="70%"/>
 <p>
 
-*   We propose a calibration-based low-rank compression framework for Audio LLM encoders. Using a small calibration set, we collect intermediate activations, perform PCA to extract principal components, and approximate the original transformations with low-dimensional projections, substantially reducing the cost of matrix multiplications during inference.
-*   We introduce a shared low-rank basis that can be reused by layers with similar activation patterns, which further decreases redundant computation and parameter storage while preserving model quality.
-*   Through extensive experiments on multiple audio understanding benchmarks, we show that our method can compress the encoder to about 60\% of its original size and reduce encoding time by roughly 30\%, while incurring only around a 2\% relative drop in task accuracy.
+*   We propose LITEALLM, a calibration-based low-rank compression framework for Audio LLM encoders that replaces dense linear layers with PCA-derived low-rank projections, significantly reducing encoder FLOPs.
+*   We design a depth- and type-aware compression schedule that linearly increases the variance-retention threshold across layers and calibrates on multiple audio tasks.
+*   Experiments on diverse audio understanding benchmarks show that LITEALLM compresses the encoder to about 60\% of its original size and speeds up encoding by roughly 30\%, with only around a 2\% relative drop in accuracy.
 
 ## Getting Started
 
 ### Step1: Get the Code
 
 ```bash
-git clone https://github.com/gugugaga36/LITEALLM.git
+git clone https://anonymous.4open.science/r/LITEALLM-E09D
 cd LITEALLM
 git submodule update --init --recursive
 pip install -r requirements.txt
