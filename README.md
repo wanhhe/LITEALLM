@@ -15,7 +15,7 @@ We propose LITEALLM, a method that compresses the encoder in large audio languag
 
 *   We propose LITEALLM, a calibration-based low-rank compression framework for Audio LLM encoders that replaces dense linear layers with PCA-derived low-rank projections, significantly reducing encoder FLOPs.
 *   We design a depth- and type-aware compression schedule that linearly increases the variance-retention threshold across layers and calibrates on multiple audio tasks.
-*   Experiments on diverse audio understanding benchmarks show that LITEALLM compresses the encoder to about 60\% of its original size and speeds up encoding by roughly 20\%, with only around a 2\% relative drop in accuracy.
+*   Experiments on diverse audio understanding benchmarks show that LITEALLM speeds up encoding by roughly 20\%, with only around a 2\% relative drop in accuracy.
 
 ## Getting Started
 
