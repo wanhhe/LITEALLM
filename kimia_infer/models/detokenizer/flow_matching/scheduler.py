@@ -89,7 +89,7 @@ class StreamingFlowMatchingScheduler(SchedulerBase):
         noise: torch.FloatTensor,
         timesteps: torch.IntTensor,
     ):
-        ut = original_samples - (1 - self.sigma_min) * noise  # 和ut的梯度没关系
+        ut = original_samples - (1 - self.sigma_min) * noise  # Not related to the gradient of ut
         t_unsqueeze = timesteps.unsqueeze(1).unsqueeze(1).float() / self.timesteps
         x_noisy = (
             t_unsqueeze * original_samples

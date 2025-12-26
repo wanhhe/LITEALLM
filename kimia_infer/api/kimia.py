@@ -221,9 +221,10 @@ class KimiAudio(object):
         text_repetition_window_size=16,
         max_new_tokens=-1,
     ):
-        ## TODO: 需要一个check函数，检查输入的history格式是否合法
-        ## 比如，对于ASR任务，一定是: text-instruction/audio-instruction + audio-content, 我理解content和instruction是不能换位置的
-        ## assistant前必须有user等等，我觉得最好做一下check
+        ## TODO: Need a check function to verify input history format is valid
+        ## For example, for ASR task, must be: text-instruction/audio-instruction + audio-content, 
+        ## I understand content and instruction cannot be swapped
+        ## Must have user before assistant, etc., I think it's best to add a check
 
         assert output_type in ["text", "both"]
 
@@ -265,7 +266,7 @@ class KimiAudio(object):
 
         generated_wav_tokens = [
             t for t in generated_wav_tokens if t >= self.kimia_token_offset
-        ]  #  filter out the illegal tokens
+        ]  # Filter out the illegal tokens
 
         generated_wav_tokens = torch.tensor(generated_wav_tokens).unsqueeze(0)
         generated_wav_tokens = generated_wav_tokens - self.kimia_token_offset

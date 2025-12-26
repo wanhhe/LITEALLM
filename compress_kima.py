@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 IGNORE_TOKEN_ID = LabelSmoother.ignore_index
 
-# ===== 标签集合 =====
+# ===== Label Sets =====
 EMOTION_LABELS = [
     "anger",
     "disgust",
@@ -49,13 +49,13 @@ SEC_LABELS = [
 ]
 
 
-# ========= 一些通用小工具 =========
+# ========= General Utility Functions =========
 def normalize_class_prediction(raw_text: str, valid_labels: List[str]) -> str:
     """
-    归一化分类任务的文本输出：
-    - 小写
-    - 只看第一行、首个 token
-    - 在整句中尝试匹配任意一个 valid_labels
+    Normalize text output for classification tasks:
+    - Convert to lowercase
+    - Only consider the first line and first token
+    - Try to match any valid_labels in the entire sentence
     """
     if raw_text is None:
         return ""
@@ -93,13 +93,13 @@ def build_emotion_messages(audio_path: str, prompt: str):
 
 
 def build_sec_messages(audio_path: str, prompt: str):
-    # 和 emotion 结构一样，只是 prompt 不同
+    # Same structure as emotion, only prompt differs
     return build_emotion_messages(audio_path, prompt)
 
 
 def build_aqa_messages(audio_path: str, question: str, prompt: str):
     """
-    AQA：先给文字说明 + 问题，再给 audio。
+    AQA: First provide text instruction + question, then audio.
     """
     full_prompt = f"{prompt}\n问题：{question}"
     return [
@@ -123,10 +123,10 @@ def build_ar_messages(
     ar_prompt: str,
 ):
     """
-    AR 任务：多选题，但只让模型输出**完整选项文本**。
-    choices: List[str]，例如 ["Man", "Woman", "Child", "Robot"]
+    AR task: Multiple choice, but only let the model output **complete option text**.
+    choices: List[str], e.g. ["Man", "Woman", "Child", "Robot"]
     """
-    # 把选项排版好，但不使用 A/B/C/D，避免模型只输出字母
+    # Format choices nicely, but don't use A/B/C/D to avoid model outputting only letters
     choices_str = "\n".join(f"- {c}" for c in choices)
 
     text = (
@@ -152,14 +152,14 @@ def build_ar_messages(
 
 def ensure_audio_path_from_cell(audio_cell, idx: int, tmp_audio_dir: str) -> str:
     """
-    将 parquet 中一格 audio_cell 转成【音频文件路径】。
+    Convert an audio_cell from parquet to an audio file path.
 
-    当前只支持：
-    1) str: 已经是路径，直接返回
+    Currently only supports:
+    1) str: Already a path, return directly
     2) dict:
-       - bytes: 完整 wav bytes -> 写文件
-    3) bytes/bytearray: 完整 wav bytes -> 写文件
-    如需支持 path / array+sr，可再扩展。
+       - bytes: Complete wav bytes -> write to file
+    3) bytes/bytearray: Complete wav bytes -> write to file
+    To support path / array+sr, can be extended later.
     """
     if isinstance(audio_cell, str):
         return audio_cell
@@ -195,11 +195,11 @@ def ensure_waveform_from_cell(
     target_sr: int = 16000,
 ) -> np.ndarray:
     """
-    将 audio_cell 转成 waveform(np.ndarray, shape [T])，用于直接喂给 whisper_model。
-    当前只支持：
+    Convert audio_cell to waveform (np.ndarray, shape [T]) for direct input to whisper_model.
+    Currently only supports:
     - dict + bytes
-    - str 路径
-    - 纯 bytes
+    - str path
+    - pure bytes
     """
     if isinstance(audio_cell, dict):
         if "bytes" in audio_cell and isinstance(audio_cell["bytes"], (bytes, bytearray)):
@@ -225,7 +225,7 @@ def ensure_waveform_from_cell(
     )
 
 
-# ========= QA / AR 指标辅助 =========
+# ========= QA / AR Metric Helpers =========
 def _normalize_text_for_qa(s: str) -> str:
     if s is None:
         return ""
@@ -253,14 +253,14 @@ def _f1_score(pred: str, gold: str) -> float:
 
 def _normalize_ar_answer(s: str) -> str:
     """
-    AR 任务的答案归一：优先取首个非空字符（A/B/C/D），否则整体小写去空格。
+    Normalize AR task answer: Prefer first non-empty character (A/B/C/D), otherwise lowercase and strip spaces.
     """
     if s is None:
         return ""
     s = s.strip()
     if not s:
         return ""
-    # 先看首个字母
+    # First check the first letter
     for ch in s:
         if ch.isalpha():
             return ch.lower()
@@ -268,7 +268,7 @@ def _normalize_ar_answer(s: str) -> str:
 
 
 # ======================
-# 参数定义
+# Parameter Definitions
 # ======================
 @dataclass
 class ModelArguments:
@@ -289,7 +289,7 @@ class ModelArguments:
 
 @dataclass
 class DataArguments:
-    # ===== 基础：benchmark 用的数据 =====
+    # ===== Basic: Benchmark data =====
     data_path: str = field(
         default=None, metadata={"help": "Path to the benchmark data."}
     )
@@ -300,7 +300,7 @@ class DataArguments:
     num_calib_samples: int = 1000
     num_test_samples: int = 64
 
-    # benchmark 任务类型
+    # Benchmark task type
     task: str = field(
         default="asr",
         metadata={
@@ -308,7 +308,7 @@ class DataArguments:
         },
     )
 
-    # ===== Emotion benchmark 参数 =====
+    # ===== Emotion benchmark parameters =====
     emotion_audio_column: str = field(
         default="audio",
         metadata={"help": "Parquet column for audio data in emotion benchmark."},
@@ -336,7 +336,7 @@ class DataArguments:
         metadata={"help": "Directory for temporary audio files in emotion benchmark."},
     )
 
-    # ===== Sound Event Classification (sec) 参数 =====
+    # ===== Sound Event Classification (SEC) parameters =====
     sec_audio_column: str = field(
         default="audio",
         metadata={"help": "Parquet column for audio data in SEC benchmark."},
@@ -364,7 +364,7 @@ class DataArguments:
         metadata={"help": "Directory for temporary audio files in SEC benchmark."},
     )
 
-    # ===== Audio Question Answering (aqa) 参数 =====
+    # ===== Audio Question Answering (AQA) parameters =====
     aqa_audio_column: str = field(
         default="audio",
         metadata={"help": "Parquet column for audio data in AQA benchmark."},
@@ -395,7 +395,7 @@ class DataArguments:
         metadata={"help": "Directory for temporary audio files in AQA benchmark."},
     )
 
-    # ===== Audio Reasoning (ar) 参数 =====
+    # ===== Audio Reasoning (AR) parameters =====
     ar_audio_column: str = field(
         default="audio",
         metadata={"help": "Parquet column for audio data in AR benchmark."},
@@ -430,7 +430,7 @@ class DataArguments:
         metadata={"help": "Directory for temporary audio files in AR benchmark."},
     )
 
-    # =====⭐ 标定用配置（可与 benchmark 不同） =====
+    # =====⭐ Calibration configuration (can differ from benchmark) =====
     calib_task: Optional[str] = field(
         default=None,
         metadata={
@@ -474,7 +474,7 @@ def rank0_print(*args):
 
 
 # ======================
-# 数据加载
+# Data Loading
 # ======================
 def make_supervised_data_module(
     whisper_model,
@@ -486,8 +486,8 @@ def make_supervised_data_module(
     data_path_override: Optional[str] = None,
 ) -> Dict:
     """
-    构造 ASR 用的 LazySupervisedDataset。
-    data_path_override 不为 None 时，优先使用该路径。
+    Construct LazySupervisedDataset for ASR.
+    When data_path_override is not None, use that path preferentially.
     """
     dataset_cls = LazySupervisedDataset
     path = data_path_override or data_args.data_path
@@ -537,10 +537,10 @@ def make_supervised_data_module(
 
 def extract_ref_and_chats_from_raw(raw_item: dict):
     """
-    从 raw_item 里抽出：
-      - ref_text: 参考转写（最后一个 assistant 文本）
-      - infer_chats: 用于 generate() 的输入，对话里去掉参考答案文本，
-                     以及删掉 audio 里的 audio_tokens（只保留文件路径）
+    Extract from raw_item:
+      - ref_text: Reference transcription (last assistant text)
+      - infer_chats: Input for generate(), remove reference answer text from conversation,
+                     and remove audio_tokens from audio (keep only file path)
     """
     conv = raw_item["conversation"]
 
@@ -566,7 +566,7 @@ def extract_ref_and_chats_from_raw(raw_item: dict):
     return ref_text, infer_chats
 
 
-# ====== 根据 task 拿默认 audio_column / tmp_dir（用于 calib） ======
+# ====== Get default audio_column / tmp_dir based on task (for calib) ======
 def get_default_audio_column_for_task(task: str, data_args: DataArguments) -> str:
     if task == "emotion":
         return data_args.emotion_audio_column
@@ -592,7 +592,7 @@ def get_default_tmp_dir_for_task(task: str, data_args: DataArguments) -> str:
 
 
 # ======================
-# Benchmark 各任务函数
+# Benchmark Task Functions
 # ======================
 def benchmark_asr(model, dataset, n: int, desc: str, device: torch.device):
     n = min(n, len(dataset))
@@ -676,7 +676,7 @@ def benchmark_asr(model, dataset, n: int, desc: str, device: torch.device):
             f"({tokens_per_second:.1f} tokens/s)"
         )
 
-        # 编码器测速
+        # Encoder speed measurement
         used_samples = 0
         total_gen_time = 0.0
         t0 = time.time()
@@ -822,7 +822,7 @@ def benchmark_emotion(
             f"({tokens_per_second:.1f} tokens/s)"
         )
 
-        # encoder 测速
+        # Encoder speed measurement
         used_samples = 0
         total_gen_time = 0.0
         t0 = time.time()
@@ -968,7 +968,7 @@ def benchmark_sec(
             f"({tokens_per_second:.1f} tokens/s)"
         )
 
-        # encoder 测速
+        # Encoder speed measurement
         used_samples = 0
         total_gen_time = 0.0
         t0 = time.time()
@@ -1120,7 +1120,7 @@ def benchmark_aqa(
             f"({tokens_per_second:.1f} tokens/s)"
         )
 
-        # encoder 测速
+        # Encoder speed measurement
         used_samples = 0
         total_gen_time = 0.0
         t0 = time.time()
@@ -1156,16 +1156,16 @@ def benchmark_aqa(
 def _norm_str(s: str) -> str:
     if s is None:
         return ""
-    # 小写 + 去首尾空白 + 合并多余空格 + 去掉首尾引号
+    # Lowercase + strip whitespace + merge extra spaces + remove leading/trailing quotes
     s = str(s).strip().strip("\"'").lower()
     s = " ".join(s.split())
     return s
 
 def get_ar_gold_choice(answer_field, choices: list) -> str:
     """
-    把数据集中 answer 字段映射为一个 choice 文本：
-    - 若 answer 是数字/数字字符串：按索引取 choices[int(answer)]
-    - 若 answer 是字符串：在 choices 里找最匹配的那个
+    Map answer field in dataset to a choice text:
+    - If answer is number/numeric string: get choices[int(answer)] by index
+    - If answer is string: find the best matching one in choices
     """
     if isinstance(answer_field, (int, np.integer)) or (
         isinstance(answer_field, str) and answer_field.isdigit()
@@ -1173,57 +1173,57 @@ def get_ar_gold_choice(answer_field, choices: list) -> str:
         idx = int(answer_field)
         if 0 <= idx < len(choices):
             return choices[idx]
-        # 超范围就直接返回原始
+        # Out of range, return original directly
         return str(answer_field)
 
-    # 否则当作字符串匹配
+    # Otherwise treat as string matching
     ans_norm = _norm_str(answer_field)
     norm_choices = [_norm_str(c) for c in choices]
 
-    # 精确匹配
+    # Exact match
     for c, nc in zip(choices, norm_choices):
         if ans_norm == nc:
             return c
 
-    # 包含匹配
+    # Substring match
     for c, nc in zip(choices, norm_choices):
         if nc in ans_norm or ans_norm in nc:
             return c
 
-    # 实在不行，就返回原始 answer
+    # If all else fails, return original answer
     return str(answer_field)
 
 
 def match_ar_pred_to_choice(pred_text: str, choices: list) -> str:
     """
-    从模型生成的文本中，找出最可能的 choice：
-    - 只取第一行
-    - 尽量匹配到某个选项文本
+    Find the most likely choice from model-generated text:
+    - Only take the first line
+    - Try to match to some option text
     """
     if pred_text is None:
         return ""
 
-    # 先取第一行，防止有多行 babble
+    # First take the first line to prevent multi-line babble
     line = pred_text.strip().split("\n")[0].strip().strip("\"'")
     pred_norm = _norm_str(line)
     norm_choices = [_norm_str(c) for c in choices]
 
-    # 1) 精确匹配
+    # 1) Exact match
     for c, nc in zip(choices, norm_choices):
         if pred_norm == nc:
             return c
 
-    # 2) 包含关系（选项在回答里 / 回答是选项的子串）
+    # 2) Substring relationship (option in answer / answer is substring of option)
     for c, nc in zip(choices, norm_choices):
         if nc in pred_norm or pred_norm in nc:
             return c
 
-    # 3) 进一步从回答里找第一个包含的选项片段
+    # 3) Further find first matching option fragment from answer
     for c in choices:
         if _norm_str(c) in pred_norm:
             return c
 
-    # 4) 实在找不到，就返回规整后的整句；accuracy 会算错，这也没问题
+    # 4) If still not found, return normalized sentence; accuracy will be wrong, that's fine
     return line
 
 def benchmark_ar(
@@ -1235,17 +1235,17 @@ def benchmark_ar(
     data_args: DataArguments,
 ):
     """
-    AR: AudioReason 多项选择题任务
-    data_args 里需要有：
-      - ar_audio_column: 存音频的列名（一般是 'audio'）
-      - ar_question_column: 存 question 的列名（一般是 'question'）
-      - ar_choices_column: 存 choices 的列名（一般是 'choices'，list 或 JSON 字符串）
-      - ar_answer_column: 存 answer 的列名（一般是 'answer'）
-      - ar_prompt: 提示词（上面定义的 AR_PROMPT_DEFAULT）
-      - ar_audio_from_binary: 是否为 dict/bytes，需要写临时文件
-      - tmp_audio_dir: 临时音频目录
+    AR: AudioReason multiple choice task
+    data_args needs to have:
+      - ar_audio_column: Column name for audio (usually 'audio')
+      - ar_question_column: Column name for question (usually 'question')
+      - ar_choices_column: Column name for choices (usually 'choices', list or JSON string)
+      - ar_answer_column: Column name for answer (usually 'answer')
+      - ar_prompt: Prompt (AR_PROMPT_DEFAULT defined above)
+      - ar_audio_from_binary: Whether it's dict/bytes, needs to write temp file
+      - tmp_audio_dir: Temporary audio directory
     """
-    assert isinstance(df, pd.DataFrame), "AR 任务期望 dataset 是 pandas.DataFrame"
+    assert isinstance(df, pd.DataFrame), "AR task expects dataset to be pandas.DataFrame"
     n = min(num_samples, len(df))
     print(f"[{desc}] (AR) benchmarking on {n} samples (full generate per sample)...")
 
@@ -1263,7 +1263,7 @@ def benchmark_ar(
     correct = 0
 
     with torch.no_grad():
-        # 预热
+        # Warmup
         warmup = min(2, n)
         for i in range(warmup):
             row = df.iloc[i]
@@ -1274,13 +1274,13 @@ def benchmark_ar(
             else:
                 audio_path = audio_cell
 
-            # 解析 choices
+            # Parse choices
             choices_raw = row[col_choices]
             if isinstance(choices_raw, str):
                 try:
                     choices = json.loads(choices_raw)
                 except Exception:
-                    # 你也可以根据实际格式手动 split，例如用 '||' 之类
+                    # You can also manually split based on actual format, e.g. using '||'
                     choices = [choices_raw]
             else:
                 choices = list(choices_raw)
@@ -1303,7 +1303,7 @@ def benchmark_ar(
                 text_top_k=5,
             )
 
-        # 正式计时 + 准确率
+        # Official timing + accuracy
         t0 = time.time()
         for idx in tqdm(range(n), desc=f"Counting Time in {desc} (AR)"):
             row = df.iloc[idx]
@@ -1383,7 +1383,7 @@ def benchmark_ar(
         print(f"[{desc}] (AR) avg {avg_time_per_token*1000:.3f} ms / token "
               f"({tokens_per_second:.1f} tokens/s)")
 
-        # encoder 测速
+        # Encoder speed measurement
         used_samples = 0
         total_gen_time = 0.0
         t0 = time.time()
@@ -1418,7 +1418,7 @@ def benchmark_ar(
 
 
 # ======================
-# 统一入口：benchmark_model_single
+# Unified Entry: benchmark_model_single
 # ======================
 def benchmark_model_single(
     model,
@@ -1444,7 +1444,7 @@ def benchmark_model_single(
 
 
 # ======================
-# 主入口
+# Main Entry
 # ======================
 def run():
     global local_rank
@@ -1461,7 +1461,7 @@ def run():
     text_tokenizer = model.prompt_manager.text_tokenizer
     whisper_model = model.prompt_manager.whisper_model
 
-    # ========= 1) Benchmark 数据加载 =========
+    # ========= 1) Benchmark data loading =========
     if data_args.task == "asr":
         bench_dm = make_supervised_data_module(
             whisper_model=whisper_model,
@@ -1485,7 +1485,7 @@ def run():
         bench_dataset = bench_dataset.sample(frac=1, random_state=42).reset_index(drop=True)
         print(f"Loaded {len(bench_dataset)} '{data_args.task}' benchmark samples from {data_args.data_path}")
 
-    # ====== 压缩前 benchmark ======
+    # ====== Benchmark before compression ======
     benchmark_model_single(
         model,
         bench_dataset,
@@ -1496,7 +1496,7 @@ def run():
         data_args=data_args,
     )
 
-    # ========= 2) 低秩压缩 & 标定 =========
+    # ========= 2) Low-rank compression & calibration =========
     if model_args.low_rank:
         whisper_encoder = whisper_model.speech_encoder
         attach_calibration_hooks_to_whisper_encoder(whisper_encoder)
@@ -1506,7 +1506,7 @@ def run():
 
         device = next(whisper_model.parameters()).device
 
-        # 选出“标定用”的 task 和 data_path（可与 benchmark 不同）
+        # Select "calibration" task and data_path (can differ from benchmark)
         calib_task = data_args.calib_task
         calib_data_path = data_args.calib_data_path
 
@@ -1535,7 +1535,7 @@ def run():
                     _ = whisper_model(wav_tensor)
 
         # else:
-        #     # parquet 类任务：只需要音频
+        #     # Parquet-like tasks: only need audio
         #     import glob
         #     if os.path.isdir(calib_data_path):
         #         files = glob.glob(os.path.join(calib_data_path, "*.parquet"))
@@ -1564,17 +1564,17 @@ def run():
             #     with torch.no_grad():
             #         _ = whisper_model(wav_tensor)
         else:
-            # parquet 类任务：只需要音频
+            # Parquet-like tasks: only need audio
             import glob
         
-            # 判断是否与 benchmark 使用同一数据集 & 同一任务
+            # Check if using same dataset & task as benchmark
             same_as_bench = (
                 calib_data_path == data_args.data_path
                 and calib_task == data_args.task
             )
         
             if same_as_bench:
-                # 直接复用上面已经加载好的 bench_dataset（已被 shuffle 过）
+                # Directly reuse the already loaded bench_dataset (already shuffled)
                 calib_df = bench_dataset
             else:
                 if os.path.isdir(calib_data_path):
@@ -1585,7 +1585,7 @@ def run():
                     calib_df = pd.concat(dfs, ignore_index=True)
                 else:
                     calib_df = pd.read_parquet(calib_data_path)
-                # 标定用的独立数据集，再单独 shuffle
+                # Independent dataset for calibration, shuffle separately
                 calib_df = calib_df.sample(frac=1, random_state=42).reset_index(drop=True)
         
             audio_col = data_args.calib_audio_column or get_default_audio_column_for_task(
@@ -1599,22 +1599,22 @@ def run():
             num_calib = min(data_args.num_calib_samples, total)
         
             if same_as_bench:
-                # 避开 benchmark 使用过的前 num_test_samples 行
+                # Avoid the first num_test_samples rows used by benchmark
                 n_bench = min(data_args.num_test_samples, total)
                 start = n_bench
                 end = min(n_bench + num_calib, total)
-                # 先用 [n_bench, end) 这部分
+                # First use [n_bench, end) portion
                 base_indices = list(range(start, end))
         
                 if len(base_indices) < num_calib:
-                    # 不够的话，再从 [0, n_bench) 里随机补
+                    # If not enough, randomly supplement from [0, n_bench)
                     rest_needed = num_calib - len(base_indices)
                     head = np.random.choice(np.arange(0, n_bench), size=rest_needed, replace=False)
                     indices = base_indices + head.tolist()
                 else:
                     indices = base_indices
             else:
-                # 不同数据集就直接用前 num_calib 个（calib_df 自己已经 shuffle 过一遍）
+                # Different dataset, directly use first num_calib (calib_df already shuffled once)
                 indices = list(range(num_calib))
         
             for i in tqdm(indices, desc=f"Collecting calibration data ({calib_task})"):
@@ -1635,7 +1635,7 @@ def run():
         )
         # print(stats)
 
-        # ===== 压缩后 benchmark =====
+        # ===== Benchmark after compression =====
         benchmark_model_single(
             model,
             bench_dataset,

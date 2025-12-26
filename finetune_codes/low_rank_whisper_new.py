@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import tqdm
 
-# ========== 低秩 Linear ==========
+# ========== Low-rank Linear ==========
 class LinearLowRank(nn.Module):
     def __init__(self, weight1: torch.Tensor, weight2: torch.Tensor, bias: torch.Tensor):
         """
@@ -12,7 +12,7 @@ class LinearLowRank(nn.Module):
         bias   : [out_features]
         """
         super().__init__()
-        # 继承原权重的 dtype / device
+        # Inherit original weight's dtype / device
         dtype = weight1.dtype
         device = weight1.device
 
@@ -24,20 +24,20 @@ class LinearLowRank(nn.Module):
         # x: [..., in_features]
         y = torch.matmul(x, self.weight1)      # [..., k]
         y = torch.matmul(y, self.weight2)      # [..., out_features]
-        y = y + self.bias                      # broadcast 到前面的维度
+        y = y + self.bias                      # broadcast to previous dimensions
         return y
 
 
-# ========== θ 随层数线性递增 ==========
+# ========== θ linearly increases with layer number ==========
 def build_layerwise_theta_fn(rank_threshold: str, num_layers: int):
     """
-    构造一个函数 theta_fn(layer_idx, is_attn) -> 当前层要用的 θ
+    Construct a function theta_fn(layer_idx, is_attn) -> θ to use for current layer
 
     rank_threshold:
         * "0.99:0.999"  -> attn_min=0.99, mlp_min=0.999
         * "0.995"       -> attn_min=mlp_min=0.995
-    我们把 attn/MLP 的 θ 从各自的 min 线性插值到一个不超过 0.999 的 max，
-    让前层压缩更激进，后层更保守。
+    We linearly interpolate θ for attn/MLP from their respective min to a max not exceeding 0.999,
+    making compression more aggressive in earlier layers and more conservative in later layers.
     """
     if ":" in rank_threshold:
         attn_min_str, mlp_min_str = rank_threshold.split(":")
@@ -49,7 +49,7 @@ def build_layerwise_theta_fn(rank_threshold: str, num_layers: int):
     ATTEN_MAX_CAP = 0.999
     MLP_MAX_CAP   = 0.999
 
-    # 最多增加 0.009，你可以之后自己调
+    # Maximum increase of 0.009, you can adjust later
     attn_max = max(attn_min, min(ATTEN_MAX_CAP, attn_min + 0.009))
     mlp_max  = max(mlp_min,  min(MLP_MAX_CAP,   mlp_min  + 0.009))
 
@@ -67,7 +67,7 @@ def build_layerwise_theta_fn(rank_threshold: str, num_layers: int):
     return theta_fn
 
 
-# ========== 在 HF WhisperEncoder 上挂 forward hook ==========
+# ========== Attach forward hook on HF WhisperEncoder ==========
 
 import torch
 import torch.nn as nn
@@ -87,26 +87,26 @@ def attach_calibration_hooks_to_whisper_encoder(encoder):
             out = out.detach()
             B, T, D = out.shape
 
-            # 1. 移到 if 之外，并确保 y 总是 float64
+            # 1. Move outside if, and ensure y is always float64
             y = out.reshape(-1, D).double().cpu() # double is float64
 
-            # 2. 初始化统计量（只在第一次）
+            # 2. Initialize statistics (only on first time)
             if not hasattr(module, "calib_count"):
                 module.calib_count = 0
-                # 初始化为 float64
+                # Initialize as float64
                 module.calib_sum_y = torch.zeros(D, dtype=torch.float64)
                 module.calib_sum_yyT = torch.zeros(D, D, dtype=torch.float64)
 
-            # 3. 累积 (现在 y 保证是 float64)
+            # 3. Accumulate (now y is guaranteed to be float64)
             module.calib_count += y.shape[0]
             module.calib_sum_y += y.sum(dim=0)
-            # 这里的 y.T @ y 将在双精度下计算
+            # Here y.T @ y will be computed in double precision
             module.calib_sum_yyT += y.T @ y
 
         return hook
 
     for layer in encoder.layers:
-        # ... (和原来一样)
+        # ... (same as before)
         attn = layer.self_attn
         for proj_name in ["q_proj", "k_proj", "v_proj", "out_proj"]:
             mod = getattr(attn, proj_name)
@@ -122,8 +122,8 @@ def apply_low_rank_to_whisper_encoder(
     rank_threshold: str = "0.99:0.999",
 ):
     """
-    使用 attach_calibration_hooks_to_whisper_encoder 收集的
-    calib_count / calib_sum_y / calib_sum_yyT 做低秩分解。
+    Use calib_count / calib_sum_y / calib_sum_yyT collected by attach_calibration_hooks_to_whisper_encoder
+    to perform low-rank decomposition.
     """
     num_layers = len(encoder.layers)
     d_model    = encoder.config.d_model
@@ -153,7 +153,7 @@ def apply_low_rank_to_whisper_encoder(
             sum_y = layer.calib_sum_y
             sum_yyT = layer.calib_sum_yyT
 
-            # 1. 在 float64 下计算协方差以保证数值稳定性
+            # 1. Compute covariance in float64 to ensure numerical stability
             mean = (sum_y / count).to(torch.float64)
             E_yyT = (sum_yyT / count).to(torch.float64)
             cov = E_yyT - torch.outer(mean, mean)
@@ -163,7 +163,7 @@ def apply_low_rank_to_whisper_encoder(
                 print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | non-finite cov, skip")
                 continue
 
-            # 2. 在 float64 下进行特征分解
+            # 2. Perform eigendecomposition in float64
             try:
                 evals, evecs = torch.linalg.eigh(cov)
             except RuntimeError as e:
@@ -180,14 +180,14 @@ def apply_low_rank_to_whisper_encoder(
             cumsum = torch.cumsum(evals_sorted, dim=0)
             theta = theta_fn(i_layer, is_attn)
 
-            # 查找k值
+            # Find k value
             found_k = (cumsum / total_energy >= theta).nonzero(as_tuple=True)[0]
             if len(found_k) == 0:
                 print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | theta={theta:.6f} too high, failed to find k, skip")
                 continue
             k = int(found_k[0].item()) + 1
 
-            # 移除效率约束
+            # Remove efficiency constraint
             # D_in  = layer.in_features
             # D_out = layer.out_features
             # k_eff_max = int(D_in * D_out / (D_in + D_out))
@@ -202,28 +202,28 @@ def apply_low_rank_to_whisper_encoder(
             print(f"[HF-cov] layer {i_layer:02d} | {name:8s} | theta={theta:.6f} | k={k}/{len(evals_sorted)}")
             
             proj_indices = indices[:k]
-            V_k = evecs[:, proj_indices] # V_k 依然是 float64
+            V_k = evecs[:, proj_indices] # V_k is still float64
 
-            # ====== 构造低秩分解 ======
+            # ====== Construct low-rank decomposition ======
             device = layer.weight.device
             dtype  = layer.weight.dtype
 
-            # 3. ★★★★★ 新增的修复步骤 ★★★★★
-            # 将用于构造的张量统一转换到 float32
+            # 3. ★★★★★ New fix step ★★★★★
+            # Convert tensors used for construction uniformly to float32
             mean_32 = mean.to(torch.float32)
             V_k_cpu = V_k.to(dtype=torch.float32, device="cpu")
-            # ★★★★★ 修复结束 ★★★★★
+            # ★★★★★ Fix end ★★★★★
 
             W = layer.weight.T.detach().to(dtype=torch.float32, device="cpu")
             w1 = W @ V_k_cpu
             w2 = V_k_cpu.T
 
             if layer.bias is None:
-                # 现在所有张量都是 float32
+                # Now all tensors are float32
                 bias = mean_32 - mean_32 @ V_k_cpu @ V_k_cpu.T
             else:
                 bias0 = layer.bias.detach().to(dtype=torch.float32, device="cpu")
-                # 现在所有张量都是 float32
+                # Now all tensors are float32
                 bias = mean_32 + (bias0 - mean_32) @ V_k_cpu @ V_k_cpu.T
 
             w1   = w1.to(device=device, dtype=dtype)
