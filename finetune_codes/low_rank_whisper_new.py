@@ -208,11 +208,9 @@ def apply_low_rank_to_whisper_encoder(
             device = layer.weight.device
             dtype  = layer.weight.dtype
 
-            # 3. ★★★★★ New fix step ★★★★★
-            # Convert tensors used for construction uniformly to float32
+            # 3. Convert tensors used for construction uniformly to float32
             mean_32 = mean.to(torch.float32)
             V_k_cpu = V_k.to(dtype=torch.float32, device="cpu")
-            # ★★★★★ Fix end ★★★★★
 
             W = layer.weight.T.detach().to(dtype=torch.float32, device="cpu")
             w1 = W @ V_k_cpu
