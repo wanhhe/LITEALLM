@@ -22,7 +22,7 @@ We propose LITEALLM, a method that compresses the encoder in large audio languag
 ### Step1: Get the Code
 
 ```bash
-git clone https://anonymous.4open.science/r/LITEALLM-E09D
+git clone https://anonymous.4open.science/r/LITEALLM-B408
 cd LITEALLM
 git submodule update --init --recursive
 pip install -r requirements.txt
